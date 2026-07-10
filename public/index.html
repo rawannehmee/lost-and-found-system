@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AUK Lost + Found</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="masthead-title">
+        <span class="masthead-eyebrow">American University of Kuwait</span>
+        <h1>Lost <span class="plus">+</span> Found</h1>
+      </div>
+      <button class="btn btn-report" id="btn-report">Report an item</button>
+    </div>
+  </header>
+
+  <main class="board">
+    <div class="controls">
+      <div class="tabs" role="tablist" aria-label="Filter by type">
+        <button class="tab is-active" data-type="" role="tab" aria-selected="true">All</button>
+        <button class="tab" data-type="lost" role="tab" aria-selected="false">Lost</button>
+        <button class="tab" data-type="found" role="tab" aria-selected="false">Found</button>
+      </div>
+      <div class="filters">
+        <input type="search" id="search" placeholder="Search title, description, location…" aria-label="Search items" />
+        <select id="filter-category" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option value="electronics">Electronics</option>
+          <option value="clothing">Clothing</option>
+          <option value="documents">Documents</option>
+          <option value="keys">Keys</option>
+          <option value="bags">Bags</option>
+          <option value="jewelry">Jewelry</option>
+          <option value="books">Books</option>
+          <option value="other">Other</option>
+        </select>
+        <select id="filter-status" aria-label="Filter by status">
+          <option value="">Open + resolved</option>
+          <option value="open">Open only</option>
+          <option value="resolved">Resolved only</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="result-count" id="result-count" aria-live="polite"></p>
+    <div class="grid" id="grid"></div>
+
+    <div class="empty" id="empty" hidden>
+      <p class="empty-title">Nothing on the board.</p>
+      <p>No items match these filters. Clear the search, or report an item to add the first tag.</p>
+    </div>
+  </main>
+
+  <!-- Report / Edit form -->
+  <dialog id="dlg-form" class="dialog">
+    <form id="item-form" method="dialog" novalidate>
+      <h2 id="form-title">Report an item</h2>
+      <input type="hidden" id="f-id" />
+
+      <fieldset class="type-choice">
+        <legend>What happened?</legend>
+        <label><input type="radio" name="type" value="lost" checked /> <span>I lost something</span></label>
+        <label><input type="radio" name="type" value="found" /> <span>I found something</span></label>
+      </fieldset>
+
+      <label>Item title
+        <input type="text" id="f-title" required maxlength="80" placeholder="e.g. Black North Face backpack" />
+      </label>
+
+      <label>Description
+        <textarea id="f-description" rows="3" maxlength="500" placeholder="Distinctive details help the owner recognize it"></textarea>
+      </label>
+
+      <div class="form-row">
+        <label>Category
+          <select id="f-category" required>
+            <option value="electronics">Electronics</option>
+            <option value="clothing">Clothing</option>
+            <option value="documents">Documents</option>
+            <option value="keys">Keys</option>
+            <option value="bags">Bags</option>
+            <option value="jewelry">Jewelry</option>
+            <option value="books">Books</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Date
+          <input type="date" id="f-date" required />
+        </label>
+      </div>
+
+      <label>Location
+        <input type="text" id="f-location" required maxlength="120" placeholder="e.g. Library, 2nd floor" />
+      </label>
+
+      <div class="form-row">
+        <label>Your name
+          <input type="text" id="f-contact-name" required maxlength="60" />
+        </label>
+        <label>Email or phone
+          <input type="text" id="f-contact-info" required maxlength="80" />
+        </label>
+      </div>
+
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" id="btn-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btn-save">Post to board</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Item detail -->
+  <dialog id="dlg-detail" class="dialog"></dialog>
+
+  <footer class="footer">
+    <span>CPEG/CSIS445 Cloud Computing - Assignment 1</span>
+    <span class="mono">API: /api/items</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
