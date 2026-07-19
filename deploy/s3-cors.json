@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedHeaders": ["Content-Type"],
+    "AllowedMethods": ["PUT", "GET"],
+    "AllowedOrigins": ["*"],
+    "ExposeHeaders": [],
+    "MaxAgeSeconds": 3600
+  }
+]

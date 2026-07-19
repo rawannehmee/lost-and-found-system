@@ -303,3 +303,53 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* Photos (Assignment 2 - stored in Amazon S3) */
+
+.tag-photo {
+  width: calc(100% + 32px);
+  margin: -12px -16px 4px;
+  height: 140px;
+  object-fit: cover;
+  border-bottom: 1px solid var(--line);
+  display: block;
+}
+
+.detail-photo {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  margin: 4px 0 12px;
+  display: block;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.photo-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: -6px;
+}
+
+.photo-preview img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.btn-small { padding: 6px 12px; font-size: 13px; }
+
+input[type="file"] {
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 0;
+}

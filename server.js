@@ -1,10 +1,12 @@
 // server.js - Express backend
-// Run with: npm start, then open http://localhost:3000
+// Run with: npm start, then open http://localhost:3000 (or the EC2 public IP)
 
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const db = require("./db");
+const s3 = require("./s3");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +55,10 @@ function validate(body, { partial = false } = {}) {
   if (body.description !== undefined && typeof body.description !== "string") {
     errors.push("'description' must be a string");
   }
+  // photo_key: null removes the photo, otherwise it must be a key we issued
+  if (body.photo_key !== undefined && body.photo_key !== null && !s3.isValidKey(body.photo_key)) {
+    errors.push("'photo_key' must be a key returned by POST /api/uploads, or null");
+  }
   return errors;
 }
 
@@ -66,10 +72,38 @@ function parseId(req, res) {
   return id;
 }
 
+/** Add a pre-signed photo_url to an item (null if no photo). */
+async function withPhotoUrl(item) {
+  return {
+    ...item,
+    photo_url: item.photo_key && s3.isConfigured()
+      ? await s3.presignDownload(item.photo_key)
+      : null,
+  };
+}
+
+// so async errors reach the error middleware instead of hanging
+const asyncRoute = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
 // REST API (Web Services layer)
 
+// POST /api/uploads - pre-signed S3 upload URL for one photo.
+// The browser PUTs the file to the URL, then sends the key as photo_key.
+app.post("/api/uploads", asyncRoute(async (req, res) => {
+  if (!s3.isConfigured()) {
+    return res.status(503).json({ error: "Photo storage (S3) is not configured on this server" });
+  }
+  const contentType = (req.body || {}).content_type;
+  if (!s3.isValidContentType(contentType)) {
+    return res.status(400).json({
+      error: `'content_type' must be one of: ${Object.keys(s3.CONTENT_TYPES).join(", ")}`,
+    });
+  }
+  res.status(201).json(await s3.presignUpload(contentType));
+}));
+
 // GET /api/items - list items, filters: ?type= &category= &status= &q=
-app.get("/api/items", (req, res) => {
+app.get("/api/items", asyncRoute(async (req, res) => {
   const { type, category, status, q } = req.query;
   if (type && !TYPES.includes(type))
     return res.status(400).json({ error: `'type' must be one of: ${TYPES.join(", ")}` });
@@ -77,45 +111,55 @@ app.get("/api/items", (req, res) => {
     return res.status(400).json({ error: `'category' must be one of: ${CATEGORIES.join(", ")}` });
   if (status && !STATUSES.includes(status))
     return res.status(400).json({ error: `'status' must be one of: ${STATUSES.join(", ")}` });
-  res.json(db.listItems({ type, category, status, q }));
-});
+  const items = await db.listItems({ type, category, status, q });
+  res.json(await Promise.all(items.map(withPhotoUrl)));
+}));
 
 // GET /api/items/:id - get one item
-app.get("/api/items/:id", (req, res) => {
+app.get("/api/items/:id", asyncRoute(async (req, res) => {
   const id = parseId(req, res);
   if (id === null) return;
-  const item = db.getItem(id);
+  const item = await db.getItem(id);
   if (!item) return res.status(404).json({ error: `Item ${id} not found` });
-  res.json(item);
-});
+  res.json(await withPhotoUrl(item));
+}));
 
 // POST /api/items - create a new item
-app.post("/api/items", (req, res) => {
+app.post("/api/items", asyncRoute(async (req, res) => {
   const body = req.body || {};
   const errors = validate(body);
   if (errors.length) return res.status(400).json({ errors });
-  const item = db.createItem(body);
-  res.status(201).location(`/api/items/${item.id}`).json(item);
-});
+  const item = await db.createItem(body);
+  res.status(201).location(`/api/items/${item.id}`).json(await withPhotoUrl(item));
+}));
 
 // PUT /api/items/:id - update an item (can send only some fields)
-app.put("/api/items/:id", (req, res) => {
+app.put("/api/items/:id", asyncRoute(async (req, res) => {
   const id = parseId(req, res);
   if (id === null) return;
-  if (!db.getItem(id)) return res.status(404).json({ error: `Item ${id} not found` });
+  const existing = await db.getItem(id);
+  if (!existing) return res.status(404).json({ error: `Item ${id} not found` });
   const body = req.body || {};
   const errors = validate(body, { partial: true });
   if (errors.length) return res.status(400).json({ errors });
-  res.json(db.updateItem(id, body));
-});
+  const item = await db.updateItem(id, body);
+  // photo replaced or removed -> delete the old object
+  if (body.photo_key !== undefined && existing.photo_key && existing.photo_key !== body.photo_key && s3.isConfigured()) {
+    await s3.deleteObject(existing.photo_key);
+  }
+  res.json(await withPhotoUrl(item));
+}));
 
-// DELETE /api/items/:id - delete an item
-app.delete("/api/items/:id", (req, res) => {
+// DELETE /api/items/:id - delete an item (and its photo in S3, if any)
+app.delete("/api/items/:id", asyncRoute(async (req, res) => {
   const id = parseId(req, res);
   if (id === null) return;
-  if (!db.deleteItem(id)) return res.status(404).json({ error: `Item ${id} not found` });
+  const existing = await db.getItem(id);
+  if (!existing) return res.status(404).json({ error: `Item ${id} not found` });
+  await db.deleteItem(id);
+  if (existing.photo_key && s3.isConfigured()) await s3.deleteObject(existing.photo_key);
   res.status(204).end();
-});
+}));
 
 // Unknown API routes should return JSON 404, not the HTML page
 app.use("/api", (req, res) => res.status(404).json({ error: "Endpoint not found" }));
@@ -130,6 +174,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Campus Lost & Found running at http://localhost:${PORT}`);
-});
+db.init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Campus Lost & Found running on port ${PORT}`);
+      console.log(`  DB:  ${process.env.DB_HOST || "(DB_HOST not set)"}`);
+      console.log(`  S3:  ${process.env.S3_BUCKET || "(S3_BUCKET not set - photos disabled)"}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to connect to the database:", err.message);
+    process.exit(1);
+  });

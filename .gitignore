@@ -2,3 +2,4 @@ node_modules/
 lostfound.db
 server.log
 .DS_Store
+.env

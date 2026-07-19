@@ -1,5 +1,6 @@
 // app.js - frontend logic
 // Talks to the Express REST API with fetch(), exchanging JSON.
+// Photos go straight from the browser to S3 with pre-signed URLs.
 
 const API = "/api/items";
 
@@ -40,6 +41,21 @@ const createItem = (body)     => apiRequest(API, { method: "POST", body: JSON.st
 const updateItem = (id, body) => apiRequest(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) }); // PUT
 const deleteItem = (id)       => apiRequest(`${API}/${id}`, { method: "DELETE" });                  // DELETE
 
+// ask the server for a pre-signed URL, then PUT the file straight to S3
+async function uploadPhoto(file) {
+  const { key, upload_url } = await apiRequest("/api/uploads", {
+    method: "POST",
+    body: JSON.stringify({ content_type: file.type }),
+  });
+  const put = await fetch(upload_url, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!put.ok) throw new Error(`Photo upload to S3 failed (${put.status})`);
+  return key;
+}
+
 function buildQuery() {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(state)) if (value) params.set(key, value);
@@ -64,6 +80,7 @@ function tagCard(item) {
         <span class="tag-serial">${serial(item.id)}</span>
       </span>
       <span class="tag-body">
+        ${item.photo_url ? `<img class="tag-photo" src="${esc(item.photo_url)}" alt="" loading="lazy" />` : ""}
         <span class="tag-title">${esc(item.title)}</span>
         <span class="tag-desc">${esc(item.description)}</span>
         <span class="tag-meta">
@@ -100,6 +117,7 @@ async function openDetail(id) {
         <h2>${esc(item.title)}</h2>
         <span class="tag-serial">${serial(item.id)}</span>
       </div>
+      ${item.photo_url ? `<img class="detail-photo" src="${esc(item.photo_url)}" alt="Photo of ${esc(item.title)}" />` : ""}
       ${item.description ? `<p>${esc(item.description)}</p>` : ""}
       <dl>
         <dt>Category</dt><dd>${cap(item.category)}</dd>
@@ -142,9 +160,43 @@ async function openDetail(id) {
 
 // Report / edit form
 
+// photo state while the form is open
+const photoState = { existingKey: null, removed: false };
+const photoInput = document.getElementById("f-photo");
+const photoPreview = document.getElementById("photo-preview");
+const photoPreviewImg = document.getElementById("photo-preview-img");
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+function showPreview(src) {
+  photoPreviewImg.src = src;
+  photoPreview.hidden = false;
+}
+function clearPreview() {
+  photoPreviewImg.src = "";
+  photoPreview.hidden = true;
+}
+
+photoInput.addEventListener("change", () => {
+  photoState.removed = false;
+  const file = photoInput.files[0];
+  if (file) showPreview(URL.createObjectURL(file));
+  else clearPreview();
+});
+
+document.getElementById("btn-remove-photo").addEventListener("click", () => {
+  photoInput.value = "";
+  photoState.removed = true;
+  clearPreview();
+});
+
 function openForm(item = null) {
   form.reset();
   formError.hidden = true;
+  photoState.existingKey = item ? item.photo_key : null;
+  photoState.removed = false;
+  photoInput.value = "";
+  if (item && item.photo_url) showPreview(item.photo_url);
+  else clearPreview();
   document.getElementById("f-id").value = item ? item.id : "";
   document.getElementById("form-title").textContent = item ? `Edit ${serial(item.id)}` : "Report an item";
   document.getElementById("btn-save").textContent = item ? "Save changes" : "Post to board";
@@ -177,6 +229,14 @@ form.addEventListener("submit", async (event) => {
     contact_info: document.getElementById("f-contact-info").value.trim(),
   };
   try {
+    const file = photoInput.files[0];
+    if (file) {
+      if (file.size > MAX_PHOTO_BYTES) throw new Error("Photo is too large (max 5 MB)");
+      document.getElementById("btn-save").textContent = "Uploading photo…";
+      body.photo_key = await uploadPhoto(file);
+    } else if (photoState.removed && photoState.existingKey) {
+      body.photo_key = null;
+    }
     if (id) await updateItem(id, body);   // PUT
     else await createItem(body);          // POST
     dlgForm.close();
@@ -184,6 +244,8 @@ form.addEventListener("submit", async (event) => {
   } catch (err) {
     formError.textContent = err.message;
     formError.hidden = false;
+  } finally {
+    document.getElementById("btn-save").textContent = id ? "Save changes" : "Post to board";
   }
 });
 
