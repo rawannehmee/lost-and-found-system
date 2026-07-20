@@ -1,7 +1,7 @@
 # AWS Deployment Guide - AUK Lost + Found (Assignment 2)
 
 Do the steps in order, later steps use names created in earlier ones.
-Everything is free tier. Examples use me-south-1, use whatever region was
+Everything is free tier. Examples use us-east-1 (the region we deployed in), use whatever region was
 said in class, but use the same one for everything (EC2, RDS, S3).
 
 ---
@@ -71,13 +71,13 @@ not reachable from the internet at all.
 8. Additional configuration → **Initial database name: `lostfound`**
    (if you forget this, create it later with `CREATE DATABASE lostfound;`)
 9. Create database, wait until status = Available, then copy the **Endpoint**
-   (looks like `lostfound-db.xxxxxxxx.me-south-1.rds.amazonaws.com`).
+   (looks like `lostfound-db.xxxxxxxx.us-east-1.rds.amazonaws.com`).
 
 ## Step 5 — EC2 (web server)
 
 1. Console → **EC2 → Launch instance**
 2. Name: `lostfound-web`
-3. AMI: **Ubuntu Server 24.04 LTS**
+3. AMI: **Ubuntu Server 26.04 LTS** (24.04 LTS also works)
 4. Instance type: `t2.micro` or `t3.micro` (free tier)
 5. Key pair: create new (`lostfound-key`), download the `.pem`, keep it safe
 6. Network settings → Select existing security group → `lostfound-web-sg`
@@ -121,7 +121,7 @@ DB_PORT=3306
 DB_USER=admin
 DB_PASSWORD=<RDS master password>
 DB_NAME=lostfound
-AWS_REGION=me-south-1
+AWS_REGION=us-east-1
 S3_BUCKET=<bucket name from Step 1>
 ```
 

@@ -9,7 +9,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = re
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const BUCKET = process.env.S3_BUCKET;
-const REGION = process.env.AWS_REGION || "me-south-1";
+const REGION = process.env.AWS_REGION || "us-east-1";
 
 const UPLOAD_EXPIRY_SECONDS = 300;
 const DOWNLOAD_EXPIRY_SECONDS = 3600;
